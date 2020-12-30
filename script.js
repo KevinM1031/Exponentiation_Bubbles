@@ -5,20 +5,20 @@ const GROUND_HEIGHT = 32;
 const PLATFORM_WIDTH = 150;
 const PLATFORM_HEIGHT = 16;
 
-const defaultPlayerRad = 12;
+const defaultPlayerRad = 14;
 const defaultPlayerHP = 50;
-const defaultPlayerSpd = 1.5;
-const defaultPlayerJmp = 6;
+const defaultPlayerSpd = 16;
+const defaultPlayerJmp = 120;
 
 const defaultBubbleRad = 10;
 const defaultBubbleHP = 10;
 const defaultBubbleDmg = 10;
-const defaultBubbleSpd = 1;
-const defaultBubbleJmp = 3;
+const defaultBubbleSpd = 2;
+const defaultBubbleJmp = 6;
 
-const defaultFriction = 0.9;
-const defaultGravity = -0.16;
-const defaultBubbleGravity = -0.04;
+const defaultFriction = 90;
+const defaultGravity = -0.55;
+const defaultBubbleGravity = -0.15;
 const defaultBulletGravity = -0.01;
 
 const medkitChance = 10;
@@ -47,6 +47,7 @@ const KEY_Q = 81;
 const KEY_W = 87;
 
 var player;
+var savedPlayer;
 var bubbles = [];
 var platforms = [];
 var bullets = [];
@@ -58,10 +59,11 @@ var floatingTexts = [];
 var stage;
 
 var round = 0;
-var roundCooldown = 1000;
-const defaultRoundCooldown = 2000;
+var roundCooldown = 450;
+var roundComplete = false;
+const defaultRoundCooldown = 900;
 var deathCooldown = 0;
-const defaultDeathCooldown = 1000;
+const defaultDeathCooldown = 450;
 var freezeBubbles = true;
 var paused = true;
 var initScreen = true;
@@ -78,13 +80,16 @@ var keyStatus_A;
 var keyStatus_D;
 var keyStatus_W;
 
-var showBubbleHP = true;
-var showBubbleLv = true;
-var showDamage = true;
-
+var showBubbleHP = false;
+var showBubbleLv = false;
+var showDamage = false;
 
 
 function update() {
+    setTimeout(updateFunc, 10);
+}
+
+function updateFunc() {
     requestAnimationFrame(update);
     context.clearRect(0, 0, canvas.width, canvas.height);
         
@@ -106,7 +111,8 @@ function update() {
 
         context.textAlign = "left";
         context.fillText("Round: " + round, canvas.width-80, 10, 80);
-        context.fillText("Bubbles left: " + bubbles.length, canvas.width-116, 25, 116);
+        context.fillText("Lives left: " + player.lives, canvas.width-99, 25, 116);
+        context.fillText("Bubbles left: " + bubbles.length, canvas.width-116, 50, 116);
 
         if(player.currentItem.reloadCooldown > 0) {
             context.fillStyle = '#ff0000';
@@ -116,10 +122,14 @@ function update() {
         // Reward previously completed round
         if(round > 0 && roundCooldown == 0 && bubbles.length == 0 && !player.isDead) {
 
+            roundComplete = true;
+            savedPlayer = player;
             freezeBubbles = true;
             roundCooldown = defaultRoundCooldown;
             playsound("win1");
-            playsound("win2")
+            playsound("win2");
+            
+            if(round%10 == 0) player.lifeUp();
 
             let numCoins = 50;
             for(let n = 0; n < numCoins; n++) {
@@ -131,41 +141,86 @@ function update() {
 
         // Handling player death
         else if(player.isDead) {
-
-            context.fillStyle = '#ff0000';
-            context.font = "40px Orbitron";
-            context.textAlign = "center";
-            context.fillText("You died in round " + round + "!",
-                             400, 150, 1000);
-
+            
             if(deathCooldown == 0) {
                 deathCooldown = defaultDeathCooldown;
+                player.lives--;
             }
 
-            else if(deathCooldown == 1) {
-                bubbles = [];
-                coins = [];
-                medkits = [];
-                player.coins = 500;
+            if(player.lives > 0) {
+                context.fillStyle = '#ff0000';
+                context.font = "40px Orbitron";
+                context.textAlign = "center";
+                if(player.lives == 1)
+                    context.fillText("1 Life Left",
+                                 400, 150, 1000);
+                else context.fillText(player.lives + " Lives Left",
+                                 400, 150, 1000);
+            }
+            
+            else {
+                context.fillStyle = '#ff0000';
+                context.font = "40px Orbitron";
+                context.textAlign = "center";
+                context.fillText("Game Over",
+                                 400, 150, 1000);
+            }
+            
+            context.fillStyle = '#ffffff';
+            context.font = "25px Orbitron";
+            context.textAlign = "center";
+            context.fillText("You died in round " + round + "!", 400, 200, 1000);
+
+            if(deathCooldown == 1) {
+                
                 player.isDead = false;
-                player.maxHP = defaultPlayerHP;
-                player.hp = player.maxHP;
-                player.item1 = new PewPew();
-                player.item2 = new Empty();
-                player.item3 = new Empty();
-                player.item4 = new Empty();
-                player.item5 = new Empty();
-                player.currentItem = player.item1;
-                player.hpUpNum = 0;
-                player.spdUpNum = 0;
-                player.spd = defaultPlayerSpd;
-                player.jmpUpNum = 0;
-                player.jmp = defaultPlayerJmp;
-                player.frcUpNum = 0;
-                player.frc = defaultFriction;
-                freezeBubbles = true;
-                roundCooldown = defaultRoundCooldown;
-                round = 0;
+                                
+                if(player.lives > 0) {
+                    player = savedPlayer;
+                    player.hp = player.maxHP;
+                    bubbles = [];
+                    medkits = [];
+                    coins = [];
+                    bullets = [];
+                    rockets = [];
+                    freezeBubbles = true;
+                    roundCooldown = defaultRoundCooldown;
+                    round--;
+                    
+                    if(round > 1) {
+                        let numCoins = 50;
+                        for(let n = 0; n < numCoins; n++) {
+                            let rXVel = getRandomInt(-200, 200)*0.01;
+                            let rYVel = getRandomInt(-200, 200)*0.01;
+                            coins.push(new Coin(0, 1000, rXVel, rYVel, round*10));
+                        }
+                    }
+                }
+                
+                else {
+                    bubbles = [];
+                    coins = [];
+                    medkits = [];
+                    player.coins = 500;
+                    player.maxHP = defaultPlayerHP;
+                    player.hp = player.maxHP;
+                    player.item1 = new PewPew();
+                    player.item2 = new Empty();
+                    player.item3 = new Empty();
+                    player.item4 = new Empty();
+                    player.item5 = new Empty();
+                    player.currentItem = player.item1;
+                    player.hpUpNum = 0;
+                    player.spdUpNum = 0;
+                    player.spd = defaultPlayerSpd;
+                    player.jmpUpNum = 0;
+                    player.jmp = defaultPlayerJmp;
+                    player.frcUpNum = 0;
+                    player.frc = defaultFriction;
+                    freezeBubbles = true;
+                    roundCooldown = defaultRoundCooldown;
+                    round = 0;
+                }
             }
 
             deathCooldown--;
@@ -177,69 +232,69 @@ function update() {
             // Adding new bubbles
             if(roundCooldown == defaultRoundCooldown) {
 
-                // Black "default" bubbles
+                // White "default" bubbles
                 let blLvL = Math.ceil(round/2)+2;
                 let blLvR = Math.ceil((round-1)/2)+2;
-                bubbles.push(new Bubble(300, 500, -1, blLvL, '#000000',
-                                        1, 1, 1, 1, blLvL*5));
-                bubbles.push(new Bubble(-300, 500, 1, blLvR, '#000000',
-                                        1, 1, 1, 1, blLvR*5));
+                bubbles.push(new Bubble(300, 500, -defaultBubbleSpd, blLvL,
+                                        '#ffffff', 1, 1, 1, 1, blLvL*5));
+                bubbles.push(new Bubble(-300, 500, defaultBubbleSpd, blLvR,
+                                        '#fffff', 1, 1, 1, 1, blLvR*5));
 
                 // Yellow "fast" bubbles
                 if((round+1)%3 == 0) {
                     let yeLv = Math.ceil((round+1)/3/2);
-                    bubbles.push(new Bubble(250, 550, -3, yeLv, '#ffff00',
-                                            1, 1, 1, 0.5, yeLv*10));
-                    bubbles.push(new Bubble(-250, 550, 3, yeLv, '#ffff00',
-                                            1, 1, 1, 0.5, yeLv*10));
+                    bubbles.push(new Bubble(250, 550, -3*defaultBubbleSpd, yeLv,
+                                            '#ffff00', 1, 1, 1, 0.5, yeLv*10));
+                    bubbles.push(new Bubble(-250, 550, 3*defaultBubbleSpd, yeLv,
+                                            '#ffff00', 1, 1, 1, 0.5, yeLv*10));
                 }
 
                 // Magenta "jumpy" bubbles
                 if((round+1)%5 == 0) {
                     let maLv = Math.ceil((round+1)/5/2);
-                    bubbles.push(new Bubble(350, 450, -0.5, maLv, '#ff00ff',
-                                            1, 1, 1, 1.7, maLv*15));
-                    bubbles.push(new Bubble(-350, 450, 0.5, maLv, '#ff00ff',
-                                            1, 1, 1, 1.7, maLv*15));
+                    bubbles.push(new Bubble(350, 450, -0.5*defaultBubbleSpd, maLv, 
+                                            '#ff00ff', 1, 1, 1, 1.7, maLv*15));
+                    bubbles.push(new Bubble(-350, 450, 0.5*defaultBubbleSpd, maLv, 
+                                            '#ff00ff', 1, 1, 1, 1.7, maLv*15));
                 }
 
                 // Red "huge" bubbles
                 if((round+1)%6 == 0) {
                     let reLv = Math.ceil((round+1)/6/2);
-                    bubbles.push(new Bubble(150, 600, -1.5, reLv, '#ff0000',
-                                            2, 1.5, 1, 1, reLv*20));
-                    bubbles.push(new Bubble(-150, 600, 1.5, reLv, '#ff0000',
-                                            2, 1.5, 1, 1, reLv*20));
+                    bubbles.push(new Bubble(150, 600, -1.5*defaultBubbleSpd, reLv, 
+                                            '#ff0000', 2, 1.5, 1, 1, reLv*20));
+                    bubbles.push(new Bubble(-150, 600, 1.5*defaultBubbleSpd, reLv, 
+                                            '#ff0000', 2, 1.5, 1, 1, reLv*20));
                 }
 
                 // Gray "tanky" bubbles
                 if((round+1)%8 == 0) {
                     let grLv = Math.ceil((round+1)/8/2);
-                    bubbles.push(new Bubble(200, 500, -1, grLv, '#aaaaaa',
-                                            0.5, 3, 1, 1, grLv*25));
-                    bubbles.push(new Bubble(-200, 500, 1, grLv, '#aaaaaa',
-                                            0.5, 3, 1, 1, grLv*25));
+                    bubbles.push(new Bubble(200, 500, -defaultBubbleSpd, grLv,
+                                            '#888888', 0.5, 3, 1, 1, grLv*25));
+                    bubbles.push(new Bubble(-200, 500, defaultBubbleSpd, grLv,
+                                            '#888888', 0.5, 3, 1, 1, grLv*25));
                 }
 
                 // Cyan "powerful" bubbles
                 if((round+1)%9 == 0) {
                     let cyLv = Math.ceil((round+1)/9/2);
-                    bubbles.push(new Bubble(300, 400, -0.7, cyLv, '#00ffff',
-                                            1, 1, 2.5, 0.7, cyLv*30));
-                    bubbles.push(new Bubble(-300, 400, 0.7, cyLv, '#00ffff',
-                                            1, 1, 2.5, 0.7, cyLv*30));
+                    bubbles.push(new Bubble(300, 400, -0.7*defaultBubbleSpd, cyLv,
+                                            '#00ffff', 1, 1, 2.5, 0.7, cyLv*30));
+                    bubbles.push(new Bubble(-300, 400, 0.7*defaultBubbleSpd, cyLv,
+                                            '#00ffff', 1, 1, 2.5, 0.7, cyLv*30));
                 }
             }
 
             // Round complete title
-            if(round > 0) {
+            if(roundComplete) {
                 context.fillStyle = '#00ffff';
                 context.font = "40px Orbitron";
                 context.textAlign = "center";
                 context.fillText("Round " + round + " Complete!",
                                  400, 150, 1000);
 
-            // First round title
+            // First round or revived round title
             } else {
                 context.fillStyle = '#ffff00';
                 context.font = "40px Orbitron";
@@ -253,6 +308,7 @@ function update() {
                 player.hp = player.maxHP;
                 round++;
                 freezeBubbles = false;
+                roundComplete = false;
             }
 
             // Loading subtitle
@@ -268,6 +324,7 @@ function update() {
     
     // Player update
     if(!player.isDead && !paused) {
+        player.update();
         player.updateItem();
         player.applyAcceleration();
         player.applyVelocity();
@@ -291,7 +348,6 @@ function update() {
                 continue;
             }
 
-            bubbles[i].update();
             bubbles[i].applyAcceleration();
             bubbles[i].applyVelocity();
         }
@@ -435,7 +491,31 @@ function update() {
             context.fillText("Press \"ESC\" to begin",
                              canvas.width/2, 150, 1000);
             
-        } else if(inShop) {
+            context.fillStyle = '#ffffff';
+            context.font = "16px Orbitron";
+            context.textAlign = "right";
+            context.fillText("A, D, W", canvas.width/2-20, 200, 1000);
+            context.fillText("Arrow Keys", canvas.width/2-20, 220, 1000);
+            context.fillText("1, 2, 3, 4, 5", canvas.width/2-20, 240, 1000);
+            context.fillText("Q", canvas.width/2-20, 270, 1000);
+            context.fillText("E", canvas.width/2-20, 290, 1000);
+            context.fillText("C", canvas.width/2-20, 310, 1000);
+            context.fillText("7, 8, 9", canvas.width/2-20, 330, 1000);
+            context.fillText("ESC", canvas.width/2-20, 350, 1000);
+            
+            context.fillStyle = '#88ffff';
+            context.textAlign = "left";
+            context.fillText("Movement", canvas.width/2+20, 200, 1000);
+            context.fillText("Fire", canvas.width/2+20, 220, 1000);
+            context.fillText("Select item", canvas.width/2+20, 240, 1000);
+            context.fillText("Player upgrade menu", canvas.width/2+20, 270, 1000);
+            context.fillText("Item shop", canvas.width/2+20, 290, 1000);
+            context.fillText("Show held item info", canvas.width/2+20, 310, 1000);
+            context.fillText("Toggle display options", canvas.width/2+20, 330, 1000);
+            context.fillText("Pause / Resume", canvas.width/2+20, 350, 1000);
+        }
+        
+        else if(inShop) {
             
             context.fillStyle = '#ff00ff';
             context.font = "40px Orbitron";
@@ -492,11 +572,7 @@ function update() {
                                      canvas.width/2+20, 290, 1000);
                     break;
                     
-                case 1:
-                case 2:
-                case 3:
-                case 4:
-                case 5:
+                case 1: case 2: case 3: case 4: case 5:
                     context.fillStyle = '#ffffff';
                     context.font = "25px Orbitron";
                     context.textAlign = "center";
@@ -1120,7 +1196,9 @@ function update() {
                     break;
             }
             
-        } else if(inUpgrade) {
+        }
+        
+        else if(inUpgrade) {
             context.fillStyle = '#0000ff';
             context.font = "40px Orbitron";
             context.textAlign = "center";
@@ -1189,7 +1267,9 @@ function update() {
                              + " slippiness", canvas.width/2+20, 340, 1000);
             
                   
-        } else if(showInfo) {
+        }
+        
+        else if(showInfo) {
             context.fillStyle = '#ff8800';
             context.font = "40px Orbitron";
             context.textAlign = "center";
@@ -1201,7 +1281,7 @@ function update() {
                 context.font = "16px Orbitron";
                 context.textAlign = "right";
                 context.fillText("Name", canvas.width/2-20, 120, 1000);
-                context.fillText("Sell worth", canvas.width/2-20, 150, 1000);
+                context.fillText("Sell price", canvas.width/2-20, 150, 1000);
                 context.fillText(item.up1, canvas.width/2-20, 200, 1000);
                 context.fillText(item.up2, canvas.width/2-20, 230, 1000);
                 context.fillText(item.up3, canvas.width/2-20, 260, 1000);
@@ -1230,36 +1310,36 @@ function update() {
             }
             
             
-        } else {
+        }
+        
+        else {
             context.fillStyle = '#00ff00';
             context.font = "40px Orbitron";
             context.textAlign = "center";
             context.fillText("Game Paused",
                              canvas.width/2, 150, 1000);
-        }
-        
-        if(!inShop && !inUpgrade && !showInfo) {
+            
             context.fillStyle = '#ffffff';
             context.font = "16px Orbitron";
             context.textAlign = "right";
-            context.fillText("A, D", canvas.width/2-20, 200, 1000);
-            context.fillText("W", canvas.width/2-20, 220, 1000);
-            context.fillText("Arrow Keys", canvas.width/2-20, 240, 1000);
-            context.fillText("1, 2, 3, 4, 5", canvas.width/2-20, 270, 1000);
-            context.fillText("Q", canvas.width/2-20, 290, 1000);
-            context.fillText("E", canvas.width/2-20, 310, 1000);
-            context.fillText("C", canvas.width/2-20, 330, 1000);
+            context.fillText("A, D, W", canvas.width/2-20, 200, 1000);
+            context.fillText("Arrow Keys", canvas.width/2-20, 220, 1000);
+            context.fillText("1, 2, 3, 4, 5", canvas.width/2-20, 240, 1000);
+            context.fillText("Q", canvas.width/2-20, 270, 1000);
+            context.fillText("E", canvas.width/2-20, 290, 1000);
+            context.fillText("C", canvas.width/2-20, 310, 1000);
+            context.fillText("7, 8, 9", canvas.width/2-20, 330, 1000);
             context.fillText("ESC", canvas.width/2-20, 350, 1000);
             
-            context.fillStyle = '#88ffff';
+            context.fillStyle = '#88ff88';
             context.textAlign = "left";
-            context.fillText("Move sideways", canvas.width/2+20, 200, 1000);
-            context.fillText("Jump", canvas.width/2+20, 220, 1000);
-            context.fillText("Use item", canvas.width/2+20, 240, 1000);
-            context.fillText("Select item", canvas.width/2+20, 270, 1000);
-            context.fillText("Player upgrade menu", canvas.width/2+20, 290, 1000);
-            context.fillText("Item shop", canvas.width/2+20, 310, 1000);
-            context.fillText("Show held item info", canvas.width/2+20, 330, 1000);
+            context.fillText("Movement", canvas.width/2+20, 200, 1000);
+            context.fillText("Fire", canvas.width/2+20, 220, 1000);
+            context.fillText("Select item", canvas.width/2+20, 240, 1000);
+            context.fillText("Player upgrade menu", canvas.width/2+20, 270, 1000);
+            context.fillText("Item shop", canvas.width/2+20, 290, 1000);
+            context.fillText("Show held item info", canvas.width/2+20, 310, 1000);
+            context.fillText("Toggle display options", canvas.width/2+20, 330, 1000);
             context.fillText("Pause / Resume", canvas.width/2+20, 350, 1000);
         }
     }
@@ -1288,25 +1368,27 @@ function Player(x, y) {
     this.hpUpNum = 0;
     
     this.spdUpCost = 75;
-    this.spdUpInc = 0.2;
+    this.spdUpInc = 1;
     this.spdUpMult = 2;
     this.spdUpMax = 25;
     this.spdUpNum = 0;
     
     this.jmpUpCost = 125;
-    this.jmpUpInc = 0.5;
+    this.jmpUpInc = 5;
     this.jmpUpMult = 2;
     this.jmpUpMax = 12;
     this.jmpUpNum = 0;
     
     this.frcUpCost = 75;
-    this.frcUpInc = -0.05;
+    this.frcUpInc = -5;
     this.frcUpMult = 2;
     this.frcUpMax = 18;
     this.frcUpNum = 0;
 
     this.airJumpActive = false;
     this.isDead = false;
+    this.invincibility = 0;
+    this.lives = 3;
     
     this.item1 = new PewPew();
     this.item2 = new Empty();
@@ -1318,10 +1400,10 @@ function Player(x, y) {
     // Applies acceleration into velocity
     this.applyAcceleration = function() {
         this.xVel += this.xAcc;
-        if(this.xVel > 0 && this.xVel > this.spd)
-            this.xVel = this.spd;
-        else if(this.xVel < 0 && this.xVel < -this.spd)
-            this.xVel = -this.spd;
+        if(this.xVel > 0 && this.xVel > this.spd/4)
+            this.xVel = this.spd/4;
+        else if(this.xVel < 0 && this.xVel < -this.spd/4)
+            this.xVel = -this.spd/4;
 
         if(stage.inGround(this))
             this.yVel = 0;
@@ -1370,19 +1452,19 @@ function Player(x, y) {
         }
         
         if(!keyStatus_A && !keyStatus_D) {
-            this.xVel *= this.frc;
+            this.xVel *= this.frc/100;
             this.xAcc = 0;
         }
     };
     
     // Movement to left
     this.moveLeft = function() {
-        this.xAcc = 0.1;
+        this.xAcc = 1.1-this.frc/100;
     };
 
     // Movement to right
     this.moveRight = function() {
-        this.xAcc = -0.1;
+        this.xAcc = -1.1+this.frc/100;
     };
     
     // Jump movement
@@ -1390,13 +1472,13 @@ function Player(x, y) {
         
         if(stage.inGround(this)) {
             this.yPos = GROUND_HEIGHT+this.rad+0.01;
-            this.yVel = this.jmp;
+            this.yVel = this.jmp/10;
             
         } else {
             platforms.every(plat => {
                 if(plat.onPlatform(this)) {
                     this.yPos = plat.y+this.rad+0.01;
-                    this.yVel = this.jmp;
+                    this.yVel = this.jmp/10;
                     return false;
                 } else return true;
             });
@@ -1405,14 +1487,16 @@ function Player(x, y) {
     
     // Check bubble collision
     this.checkHit = function() {
-        bubbles.every(bub => {
-            if(distance(this.xPos, this.yPos, bub.xPos, bub.yPos)
-                    < bub.rad+this.rad && !bub.isDead && bub.inertness < 0) {
-                this.hurt(bub.dmg);
-                bub.kill();
-                return false;
-            } else return true;
-        });
+        if(this.invincibility == 0) {
+            bubbles.every(bub => {
+                if(distance(this.xPos, this.yPos, bub.xPos, bub.yPos)
+                        < bub.rad+this.rad && !bub.isDead) {
+                    this.hurt(bub.dmg);
+                    bub.kill();
+                    return false;
+                } else return true;
+            });
+        }
     };
     
     // Check medkit collision
@@ -1439,6 +1523,12 @@ function Player(x, y) {
         });
     };
     
+    this.lifeUp = function() {
+        playsound("regen");
+        floatingTexts.push(new FloatingText("+1 Life", this.xPos, this.yPos,
+                           0, 1, 0, 0, 30, 200, '#00ffff'));
+    }
+    
     this.heal = function(hp) {
         this.hp += hp;
         if(this.hp > this.maxHP)
@@ -1458,6 +1548,7 @@ function Player(x, y) {
     
     this.hurt = function(dmg) {
         this.hp -= dmg;
+        this.invincibility = 50;
         
         if(this.hp > 0)
             playsound("damage");
@@ -1476,7 +1567,7 @@ function Player(x, y) {
             let text = "-" + dmg;
             let rXVel = getRandomInt(-5, 5)*0.1;
             let rYVel = getRandomInt(-5, 5)*0.1;
-            let r = Math.floor(5*Math.log(dmg));
+            let r = Math.floor(10*Math.log(dmg));
             floatingTexts.push(new FloatingText(text, this.xPos, this.yPos,
                                rXVel, rYVel, 0, 0, r, 100, '#ff88ff'));
         }
@@ -1538,6 +1629,7 @@ function Player(x, y) {
     
     this.draw = function() {
         context.fillStyle = '#ff8800';
+        if(this.invincibility > 0) context.fillStyle = '#aa6600';
         if(this.isDead) context.fillStyle = '#777777';
         context.fillRect(canvas.width/2-this.xPos-this.rad,
                          canvas.height-this.yPos-this.rad,
@@ -1554,6 +1646,10 @@ function Player(x, y) {
                          canvas.height-this.yPos-this.rad-10,
                          length, 4);
     };
+    
+    this.update = function() {
+            if(this.invincibility > 0) this.invincibility--;
+    }
 }
 
 
@@ -1567,27 +1663,30 @@ function Bubble(x, y, xV, lv, color, radMult, hpMult, dmgMult, jmpMult, worth) {
     this.color = color;
     this.worth = worth;
     
-    this.inertness = 100;
     this.isDead = false;
     
     // Calculates bubble radius based on its level
     this.radiusFunction = function() {
-        return 8*Math.log(this.lv)+8;
+        let n = defaultBubbleRad * 0.3*this.lv + defaultBubbleRad;
+        if(n > 100) return 100;
+        else return n;
     };
     
     // Calculates bubble HP based on its level
     this.HPFunction = function() {
-        return defaultBubbleHP * Math.pow(2, this.lv-1);
+        return defaultBubbleHP * Math.pow(this.lv, 2);
     };
     
     // Calculates bubble damage based on its level
     this.dmgFunction = function() {
-        return defaultBubbleDmg * Math.pow(2, this.lv-1);
+        return defaultBubbleDmg * Math.pow(this.lv, 2);
     };
     
     // Calculates bubble jump based on its level
     this.jmpFunction = function() {
-        return defaultBubbleJmp*Math.log(this.lv+2);
+        let n = defaultBubbleJmp*Math.log(this.lv+2);
+        if(n > 14) return 14;
+        else return n;
     };
     
     this.radMult = radMult;
@@ -1634,7 +1733,7 @@ function Bubble(x, y, xV, lv, color, radMult, hpMult, dmgMult, jmpMult, worth) {
         this.yPos += this.yVel;
         
         if(stage.inGround(this)) {
-            this.yPos = GROUND_HEIGHT+this.rad;
+            this.yPos = GROUND_HEIGHT+this.rad-0.01;
             this.jump();
             playsound("bubble_bounce");
             
@@ -1683,7 +1782,7 @@ function Bubble(x, y, xV, lv, color, radMult, hpMult, dmgMult, jmpMult, worth) {
                 let text = "-" + dmg;
                 let rXVel = getRandomInt(-5, 5)*0.1;
                 let rYVel = getRandomInt(-5, 5)*0.1;
-                let r = Math.floor(5*Math.log(dmg));
+                let r = Math.floor(10*Math.log(dmg));
                 floatingTexts.push(new FloatingText(text, this.xPos, this.yPos,
                                    rXVel, rYVel, 0, 0, r, 100, '#ff8888'));
             }
@@ -1708,17 +1807,17 @@ function Bubble(x, y, xV, lv, color, radMult, hpMult, dmgMult, jmpMult, worth) {
             coins.push(new Coin(this.xPos, this.yPos, rXVel, rYVel, this.worth));
         }
         
-        for(n = 0; n < this.rad; n++) {
-            let rXVel = getRandomInt(-this.rad, this.rad)*0.3;
-            let rYVel = getRandomInt(-this.rad, this.rad)*0.3;
+        for(n = 0; n < this.rad/4; n++) {
+            let rXVel = getRandomInt(-this.rad, this.rad)*0.2;
+            let rYVel = getRandomInt(-this.rad, this.rad)*0.2;
             let r = getRandomInt(1, 4);
             
             if(this.color == '#000000')
                 particles.push(new Particle(this.xPos, this.yPos, rXVel, rYVel, 0, 0,
-                                            r, 40, '#ffffff'));
+                                            r, 20, '#ffffff'));
             else
                 particles.push(new Particle(this.xPos, this.yPos, rXVel, rYVel, 0, 0,
-                                            r, 40, this.color));
+                                            r, 20, this.color));
         }
     };
     
@@ -1738,39 +1837,38 @@ function Bubble(x, y, xV, lv, color, radMult, hpMult, dmgMult, jmpMult, worth) {
         context.arc(canvas.width/2-this.xPos, canvas.height-this.yPos,
                     this.rad, 0, 2*Math.PI);
 
+        context.globalAlpha = 0.25;
         context.fillStyle = this.color;
         context.fill();
+        context.globalAlpha = 1;
         
-        context.strokeStyle = '#ffffff';
+        context.strokeStyle = this.color;
         context.lineWidth = this.rad/8;
         context.stroke();
         
         if(showBubbleHP) {
             let length = (this.rad*2+7) * (this.hp/this.maxHP);
+            let height = this.rad*0.2;
             if(length < 0) length = 0;
             context.fillStyle = '#888888';
             context.fillRect(canvas.width/2-this.xPos-this.rad-4,
-                             canvas.height-this.yPos-this.rad-7,
-                             this.rad*2+7, 2);
+                             canvas.height-this.yPos-this.rad-height*2,
+                             this.rad*2+7, height);
             context.fillStyle = '#ff0000';
             context.fillRect(canvas.width/2-this.xPos-this.rad-4,
-                             canvas.height-this.yPos-this.rad-7,
-                             length, 2);
+                             canvas.height-this.yPos-this.rad-height*2,
+                             length, height);
         }
         
         if(showBubbleLv) {
             context.textAlign = 'center';
-            context.font = "10px Orbitron";
+            context.font = (this.rad*0.7) + "px Orbitron";
             context.fillStyle = '#ffffff';
-            context.fillText("Lv. " + this.lv, canvas.width/2-this.xPos-1,
-                            canvas.height-this.yPos-this.rad-10);
+            context.fillText("Lv. " + this.lv, canvas.width/2-this.xPos,
+                            canvas.height-this.yPos-this.rad-this.rad*0.6);
         }
 
     };
-    
-    this.update = function() {
-        this.inertness -= 1;
-    }
 };
 
 
@@ -1846,14 +1944,14 @@ function PewPew() {
     this.unit = "Magazine";
     
     this.dmg = 10;
-    this.vel = 10;
+    this.vel = 15;
     
     this.mag = 20;
     this.defaultMag = 20;
     this.cooldown = 0;
-    this.defaultCooldown = 20;
+    this.defaultCooldown = 14;
     this.reloadCooldown = 0;
-    this.defaultReloadCooldown = 400;
+    this.defaultReloadCooldown = 300;
     
     this.up1 = "Magazine size";
     this.up1Unit = "rounds";
@@ -1871,15 +1969,15 @@ function PewPew() {
     
     this.up3 = "Fire rate";
     this.up3Unit = "ticks delay";
-    this.up3Inc = -2;
+    this.up3Inc = -1;
     this.up3Num = 0;
-    this.up3Max = 8;
-    this.up3Cost = 50;
+    this.up3Max = 12;
+    this.up3Cost = 25;
     this.up3Mult = 2;
     
     this.up4 = "Reload speed";
     this.up4Unit = "ticks delay";
-    this.up4Inc = -40;
+    this.up4Inc = -30;
     this.up4Num = 0;
     this.up4Max = 9;
     this.up4Cost = 75;
@@ -1920,7 +2018,7 @@ function PewPew() {
         
         this.mag -= 1;
         bullets.push(new Bullet(p.xPos, p.yPos,
-                                this.vel, 0.1, this.dmg, 2, '#ffff00'));
+                                this.vel, 0.1, this.dmg, 3, '#ffff00'));
         this.cooldown = this.defaultCooldown;
         playsound("pew");
     };
@@ -1932,7 +2030,7 @@ function PewPew() {
         
         this.mag -= 1;
         bullets.push(new Bullet(p.xPos, p.yPos,
-                                0, this.vel, this.dmg, 2, '#ffff00'));
+                                0, this.vel, this.dmg, 3, '#ffff00'));
         this.cooldown = this.defaultCooldown;
         playsound("pew");
     };
@@ -1944,7 +2042,7 @@ function PewPew() {
         
         this.mag -= 1;
         bullets.push(new Bullet(p.xPos, p.yPos,
-                                -this.vel, 0.1, this.dmg, 2, '#ffff00'));
+                                -this.vel, 0.1, this.dmg, 3, '#ffff00'));
         this.cooldown = this.defaultCooldown;
         playsound("pew");
     };
@@ -1956,7 +2054,7 @@ function PewPew() {
         
         this.mag -= 1;
         bullets.push(new Bullet(p.xPos, p.yPos,
-                                0, -this.vel, this.dmg, 2, '#ffff00'));
+                                0, -this.vel, this.dmg, 3, '#ffff00'));
         this.cooldown = this.defaultCooldown;
         playsound("pew");
     };
@@ -1989,7 +2087,7 @@ function PowPow() {
     this.unit = "Magazine";
     
     this.dmg = 5;
-    this.vel = 8;
+    this.vel = 12;
     
     this.pellets = 6;
     this.spread = 8;
@@ -1997,9 +2095,9 @@ function PowPow() {
     this.mag = 8;
     this.defaultMag = 8;
     this.cooldown = 0;
-    this.defaultCooldown = 60;
+    this.defaultCooldown = 40;
     this.reloadCooldown = 0;
-    this.defaultReloadCooldown = 300;
+    this.defaultReloadCooldown = 220;
     
     this.up1 = "Magazine size";
     this.up1Unit = "rounds";
@@ -2017,9 +2115,9 @@ function PowPow() {
     
     this.up3 = "Fire rate";
     this.up3Unit = "ticks delay";
-    this.up3Inc = -4;
+    this.up3Inc = -3;
     this.up3Num = 0;
-    this.up3Max = 8;
+    this.up3Max = 12;
     this.up3Cost = 200;
     this.up3Mult = 2;
     
@@ -2070,7 +2168,7 @@ function PowPow() {
             let rXVel = this.vel + getRandomInt(-this.spread, this.spread)*0.1;
             let rYVel = 0.1 + getRandomInt(-this.spread, this.spread)*0.1;
             bullets.push(new Bullet(p.xPos, p.yPos,
-                                    rXVel, rYVel, this.dmg, 3, '#ff0000'));
+                                    rXVel, rYVel, this.dmg, 4, '#ff0000'));
         }
         
         playsound("pow");
@@ -2089,7 +2187,7 @@ function PowPow() {
             let rXVel = getRandomInt(-this.spread, this.spread)*0.1;
             let rYVel = this.vel + getRandomInt(-this.spread, this.spread)*0.1;
             bullets.push(new Bullet(p.xPos, p.yPos,
-                                    rXVel, rYVel, this.dmg, 3, '#ff0000'));
+                                    rXVel, rYVel, this.dmg, 4, '#ff0000'));
         }
         
         playsound("pow");
@@ -2108,7 +2206,7 @@ function PowPow() {
             let rXVel = -this.vel + getRandomInt(-this.spread, this.spread)*0.1;
             let rYVel = 0.1 + getRandomInt(-this.spread, this.spread)*0.1;
             bullets.push(new Bullet(p.xPos, p.yPos,
-                                    rXVel, rYVel, this.dmg, 3, '#ff0000'));
+                                    rXVel, rYVel, this.dmg, 4, '#ff0000'));
         }
         
         playsound("pow");
@@ -2127,7 +2225,7 @@ function PowPow() {
             let rXVel = getRandomInt(-this.spread, this.spread)*0.1;
             let rYVel = -this.vel + getRandomInt(-this.spread, this.spread)*0.1;
             bullets.push(new Bullet(p.xPos, p.yPos,
-                                    rXVel, rYVel, this.dmg, 3, '#ff0000'));
+                                    rXVel, rYVel, this.dmg, 4, '#ff0000'));
         }
 
         playsound("pow");
@@ -2163,17 +2261,17 @@ function BamBam() {
     this.unit = "Magazine";
     
     this.dmg = 20;
-    this.vel = 20;
+    this.vel = 36;
     
     this.piercing = 3;
-    this.spacing = 8;
+    this.spacing = 10;
     
     this.mag = 5;
     this.defaultMag = 5;
     this.cooldown = 0;
-    this.defaultCooldown = 80;
+    this.defaultCooldown = 60;
     this.reloadCooldown = 0;
-    this.defaultReloadCooldown = 250;
+    this.defaultReloadCooldown = 170;
     
     this.up1 = "Magazine size";
     this.up1Unit = "rounds";
@@ -2191,7 +2289,7 @@ function BamBam() {
     
     this.up3 = "Fire rate";
     this.up3Unit = "ticks delay";
-    this.up3Inc = -4;
+    this.up3Inc = -3;
     this.up3Num = 0;
     this.up3Max = 18;
     this.up3Cost = 75
@@ -2242,7 +2340,7 @@ function BamBam() {
         
         for(let i = 0; i < this.piercing; i++) {
             bullets.push(new Bullet(p.xPos+i*this.spacing, p.yPos,
-                                    this.vel, 0.1, this.dmg, 2, '#AAAAAA'));
+                                    this.vel, 0.1, this.dmg, 3, '#AAAAAA'));
         }
 
         playsound("bam");
@@ -2259,7 +2357,7 @@ function BamBam() {
         
         for(let i = 0; i < this.piercing; i++) {
             bullets.push(new Bullet(p.xPos, p.yPos+i*this.spacing,
-                                    0, this.vel, this.dmg, 2, '#AAAAAA'));
+                                    0, this.vel, this.dmg, 3, '#AAAAAA'));
         }
 
         playsound("bam");
@@ -2277,7 +2375,7 @@ function BamBam() {
         
         for(let i = 0; i < this.piercing; i++) {
             bullets.push(new Bullet(p.xPos-i*this.spacing, p.yPos,
-                                    -this.vel, 0.1, this.dmg, 2, '#AAAAAA'));
+                                    -this.vel, 0.1, this.dmg, 3, '#AAAAAA'));
         }
         
         playsound("bam");
@@ -2294,7 +2392,7 @@ function BamBam() {
         
         for(let i = 0; i < this.piercing; i++) {
             bullets.push(new Bullet(p.xPos, p.yPos-i*this.spacing,
-                                    0, -this.vel, this.dmg, 2, '#AAAAAA'));
+                                    0, -this.vel, this.dmg, 3, '#AAAAAA'));
         }
         
         playsound("bam");
@@ -2330,17 +2428,17 @@ function BoomBoom() {
     this.unit = "Magazine";
         
     this.dmg = 20;
-    this.vel = 2;
+    this.vel = 4;
     
     this.radius = 80;
-    this.acc = 0.15
+    this.acc = 0.5
     
     this.mag = 4;
     this.defaultMag = 4;
     this.cooldown = 0;
-    this.defaultCooldown = 50;
+    this.defaultCooldown = 36;
     this.reloadCooldown = 0;
-    this.defaultReloadCooldown = 700;
+    this.defaultReloadCooldown = 520;
     
     this.up1 = "Magazine size";
     this.up1Unit = "rounds";
@@ -2366,7 +2464,7 @@ function BoomBoom() {
     
     this.up4 = "Reload speed";
     this.up4Unit = "ticks delay";
-    this.up4Inc = -50;
+    this.up4Inc = -35;
     this.up4Num = 0;
     this.up4Max = 13;
     this.up4Cost = 30;
@@ -2488,7 +2586,7 @@ function Brrrrr() {
     this.unit = "Magazine";
     
     this.dmg = 4;
-    this.vel = 7;
+    this.vel = 12;
     
     this.pellets = 3;
     this.spread = 3;
@@ -2498,7 +2596,7 @@ function Brrrrr() {
     this.cooldown = 0;
     this.defaultCooldown = 3;
     this.reloadCooldown = 0;
-    this.defaultReloadCooldown = 1000;
+    this.defaultReloadCooldown = 750;
     
     this.up1 = "Magazine size";
     this.up1Unit = "rounds";
@@ -2524,7 +2622,7 @@ function Brrrrr() {
     
     this.up4 = "Reload Speed";
     this.up4Unit = "ticks delay";
-    this.up4Inc = -50;
+    this.up4Inc = -40;
     this.up4Num = 0;
     this.up4Max = 18;
     this.up4Cost = 100;
@@ -2678,7 +2776,7 @@ function Bullet(x, y, xVel, yVel, dmg, r, color) {
     
     this.rad = r;
     this.dmg = dmg;
-    this.life = 500;
+    this.life = 300;
     this.color = color;
     
     this.isHit = false;
@@ -2730,7 +2828,7 @@ function Bullet(x, y, xVel, yVel, dmg, r, color) {
         for(let n = 0; n < this.dmg/5; n++) {
             let rXVel = getRandomInt(-this.dmg/2, this.dmg/2)*0.1;
             let rYVel = getRandomInt(-this.dmg/2, this.dmg/2)*0.1;
-            let r = getRandomInt(0, 4);
+            let r = getRandomInt(1, 5);
             particles.push(new Particle(this.xPos, this.yPos, rXVel, rYVel, 0, 0,
                                         r, 30, '#ffff00'));
         }
@@ -2750,7 +2848,7 @@ function Bullet(x, y, xVel, yVel, dmg, r, color) {
         rYVel = this.yVel*0.1;
         c = getRandomInt(0, 9);
         particles.push(new Particle(this.xPos, this.yPos, rXVel, rYVel, 0, 0,
-                                    1, 30, '#' + c+c+c+c+c+c));
+                                    2, 30, '#' + c+c+c+c+c+c));
     };
     
     this.update = function() {
@@ -2773,7 +2871,7 @@ function Rocket(x, y, xVel, yVel, xAcc, yAcc, dmg, ran, r, color) {
     this.rad = r;
     this.dmg = dmg;
     this.ran = ran;
-    this.life = 500;
+    this.life = 300;
     this.color = color;
     
     this.isHit = false;
@@ -2844,7 +2942,7 @@ function Rocket(x, y, xVel, yVel, xAcc, yAcc, dmg, ran, r, color) {
             r = getRandomInt(2, 5);
             c = getRandomInt(0, 9);
             particles.push(new Particle(this.xPos, this.yPos, rXVel, rYVel, 0, 0,
-                                        r, 80, '#' + c+c+c+c+c+c));
+                                        r, 50, '#' + c+c+c+c+c+c));
         }
         
         for(n = 0; n < this.dmg/5; n++) {
@@ -2853,7 +2951,7 @@ function Rocket(x, y, xVel, yVel, xAcc, yAcc, dmg, ran, r, color) {
             let r = getRandomInt(10, 3);
             let c = getRandomInt(0, 9);
             particles.push(new Particle(this.xPos, this.yPos, rXVel, rYVel, 0, 0,
-                                        r, 40, '#ff' + c+c + '00'));
+                                        r, 25, '#ff' + c+c + '00'));
         }
         
         playsound("boom");
@@ -2874,14 +2972,14 @@ function Rocket(x, y, xVel, yVel, xAcc, yAcc, dmg, ran, r, color) {
         let r = getRandomInt(1, 3);
         let c = getRandomInt(0, 9);
         particles.push(new Particle(this.xPos, this.yPos, rXVel, rYVel, 0, 0,
-                                    r, 40, '#ff' + c+c + '00'));
+                                    r, 25, '#ff' + c+c + '00'));
         
         rXVel = -this.xVel*0.2 + getRandomInt(-20, 20)*0.01;
         rYVel = -this.yVel*0.2 + getRandomInt(-20, 20)*0.01;
         r = getRandomInt(2, 5);
         c = getRandomInt(0, 9);
         particles.push(new Particle(this.xPos, this.yPos, rXVel, rYVel, 0, 0,
-                                    r, 80, '#' + c+c+c+c+c+c));
+                                    r, 50, '#' + c+c+c+c+c+c));
     };
     
     this.update = function() {
@@ -3000,7 +3098,7 @@ function Medkit(x, y) {
     this.yVel = 0;
     this.prevYVel = 0;
     
-    this.life = 8000;
+    this.life = 5500;
     this.pickedUp = false;
     
     this.rad = 10;
@@ -3085,7 +3183,7 @@ function Medkit(x, y) {
         context.lineWidth = 3;
         context.strokeStyle = '#ffffff';
         context.stroke();
-        if(this.life < 1000) context.fillStyle = '#ff8800';
+        if(this.life < 600) context.fillStyle = '#ff8800';
         else context.fillStyle = '#00ff00';
         context.fill();
         
@@ -3121,7 +3219,7 @@ function Coin(x, y, xVel, yVel, worth) {
     this.yVel = yVel;
     this.prevYVel = 0;
     
-    this.life = 4000;
+    this.life = 2400;
     this.pickedUp = false;
     
     this.rad = 6;
@@ -3208,7 +3306,7 @@ function Coin(x, y, xVel, yVel, worth) {
         context.lineWidth = 3;
         context.strokeStyle = '#000000';
         context.stroke();
-        if(this.life < 1000) {
+        if(this.life < 600) {
             if(this.worth > 240) context.fillStyle = '#888888';
             else if(this.worth > 200) context.fillStyle = '#008888';
             else if(this.worth > 160) context.fillStyle = '#008800';
@@ -3237,10 +3335,6 @@ function Coin(x, y, xVel, yVel, worth) {
         let rYVel = getRandomInt(-4, 4)*0.1;
         let r = getRandomInt(1, 3);
         let c = getRandomInt(0, 9);
-        
-        if(this.life%10 == 0)
-            particles.push(new Particle(this.xPos, this.yPos, rXVel, rYVel,
-                                        0, 0.05, r, 30, '#' +c+c+c+c+ 'ff'));
     };
     
     this.update = function() {
@@ -3265,35 +3359,42 @@ function playsound(type) {
     switch(type) {
         case "bam":
             let AUD_bam = new Audio('audio/bam.wav');
+            AUD_bam.volume = 0.5;
             AUD_bam.play();
             break;
         case "boom":
             let AUD_boom = new Audio('audio/boom.wav');
+            AUD_boom.volume = 0.5;
             AUD_boom.play();
             break;
         case "boom_fire":
             let AUD_boom_fire = new Audio('audio/boom_fire.wav');
+            AUD_boom_fire.volume = 0.5;
             AUD_boom_fire.play();
             break;
         case "brrrrr":
             let AUD_brrrrr = new Audio('audio/brrrrr.wav');
+            AUD_brrrrr.volume = 0.5;
             AUD_brrrrr.play();
             break;
         case "bubble_bounce":
             let AUD_bubble_bounce = new Audio('audio/bubble_bounce.wav');
-            AUD_bubble_bounce.volume = 0.3;
+            AUD_bubble_bounce.volume = 0.15;
             AUD_bubble_bounce.play();
             break;
         case "bubble_hit":
             let AUD_bubble_hit = new Audio('audio/bubble_hit.wav');
+            AUD_bubble_hit.volume = 0.5;
             AUD_bubble_hit.play();
             break;
         case "bubble_pop":
             let AUD_bubble_pop = new Audio('audio/bubble_pop.wav');
+            AUD_bubble_pop.volume = 0.5;
             AUD_bubble_pop.play();
             break;
         case "bullet_hit":
             let AUD_bullet_hit = new Audio('audio/bullet_hit.wav');
+            AUD_bullet_hit.volume = 0.5;
             AUD_bullet_hit.play();
             break;
         case "damage":
@@ -3302,35 +3403,42 @@ function playsound(type) {
             break;
         case "pew":
             let AUD_pew = new Audio('audio/pew.wav');
+            AUD_pew.volume = 0.5;
             AUD_pew.play();
             break;
         case "pickup":
             let AUD_pickup = new Audio('audio/pickup.wav');
-            AUD_pickup.volume = 0.5;
+            AUD_pickup.volume = 0.25;
             AUD_pickup.play();
             break;
         case "pow":
             let AUD_pow = new Audio('audio/pow.wav');
+            AUD_pow.volume = 0.5;
             AUD_pow.play();
             break;
         case "regen":
             let AUD_regen = new Audio('audio/regen.wav');
+            AUD_regen.volume = 0.5;
             AUD_regen.play();
             break;
         case "reload_complete":
             let AUD_reload_complete = new Audio('audio/reload_complete.wav');
+            AUD_reload_complete.volume = 0.5;
             AUD_reload_complete.play();
             break;
         case "reload":
             let AUD_reload = new Audio('audio/reload.mp3');
+            AUD_reload.volume = 0.5;
             AUD_reload.play();
             break;
         case "win1":
             let AUD_win1 = new Audio('audio/win1.wav');
+            AUD_win1.volume = 0.5;
             AUD_win1.play();
             break;
         case "win2":
             let AUD_win2 = new Audio('audio/win2.wav');
+            AUD_win2.volume = 0.5;
             AUD_win2.play();
             break;
     }
@@ -4368,7 +4476,8 @@ stage = new Stage();
 platforms.push(new Platform(50, 132, PLATFORM_WIDTH, PLATFORM_HEIGHT));
 platforms.push(new Platform(-200, 132, PLATFORM_WIDTH, PLATFORM_HEIGHT));
 platforms.push(new Platform(-75, 232, PLATFORM_WIDTH, PLATFORM_HEIGHT));
-bubbles.push(new Bubble(300, 500, -1, 2, '#000000', 1, 1, 1, 1, 10));
-bubbles.push(new Bubble(-300, 500, 1, 2, '#000000', 1, 1, 1, 1, 10));
+bubbles.push(new Bubble(300, 500, -defaultBubbleSpd, 2, '#ffffff', 1, 1, 1, 1, 10));
+bubbles.push(new Bubble(-300, 500, defaultBubbleSpd, 2, '#ffffff', 1, 1, 1, 1, 10));
 player = new Player(0, 1000);
+savedPlayer = player;
 requestAnimationFrame(update);
