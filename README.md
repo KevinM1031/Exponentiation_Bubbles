@@ -1,8 +1,7 @@
 # Exponentiation Bubbles
 My "write a game in 24 hours challenge" done with JavaScript to learn the language.
 
-The game is really simple and you can probably figure out how to play it on your own,
-but if you want some instructions:
+The game is really simple and self-explanatory, but if you want some instructions:
 
   * Pop bubbles with your gun.
   * Avoid getting hit by bubbles.
