@@ -1,6 +1,7 @@
 # Exponentiation Bubbles
 My "write a game in 24 hours challenge" done with JavaScript to learn the language.
-Play the [game](https://kevinm1031.github.io/Exponentiation-Bubbles/).
+
+Play the [game](https://kevinm1031.github.io/Exponentiation_Bubbles/).
 
 The game is really simple and self-explanatory, but if you want some instructions:
 
